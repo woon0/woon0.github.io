@@ -1,0 +1,37 @@
+import puppeteer from 'puppeteer-core';
+import assert from 'node:assert/strict';
+const browser=await puppeteer.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,pipe:true,args:['--no-sandbox','--disable-gpu']});
+try {
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.setViewport({width:1440,height:1000});
+ await page.emulateMediaFeatures([{name:'prefers-color-scheme',value:'dark'}]);
+ await page.goto('http://127.0.0.1:5174',{waitUntil:'networkidle0'});
+ await page.$eval('.particle-field',el=>el.scrollIntoView({block:'center',behavior:'instant'}));
+ const canvas=await page.$('.field-surface canvas');
+ const snapshot=()=>page.$eval('.field-surface canvas',el=>el.toDataURL());
+ const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+ await wait(300);const live=await snapshot();await wait(150);assert.notEqual(await snapshot(),live);
+ const bounds=await page.$eval('.field-surface',el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height};});
+ await page.mouse.move(bounds.x+bounds.w*.75,bounds.y+bounds.h*.4);await wait(800);
+ await page.click('.field-modes button:nth-child(2)');assert.equal(await page.$eval('.field-modes button:nth-child(2)',el=>el.getAttribute('aria-pressed')),'true');
+ await page.mouse.move(bounds.x+bounds.w*.5,bounds.y+bounds.h*.5);await page.mouse.click(bounds.x+bounds.w*.5,bounds.y+bounds.h*.5);await wait(300);
+ await (await page.$('.particle-field')).screenshot({path:'screenshot-particle-field-dark.png'});
+ await page.click('button[aria-label="Pause particle field"]');const paused=await snapshot();await wait(150);assert.equal(await snapshot(),paused);
+ await page.focus('.field-surface');await page.keyboard.press('ArrowRight');const positioned=await snapshot();await page.keyboard.press('Space');assert.notEqual(await snapshot(),positioned);
+ await page.click('button[aria-label="Reset particle field"]');assert.notEqual(await snapshot(),paused);
+ await page.emulateMediaFeatures([{name:'prefers-color-scheme',value:'light'}]);await wait(100);
+ assert.equal(await page.$eval('.particle-field',el=>getComputedStyle(el).getPropertyValue('--field-background').trim()),'#ece7f0');
+ await (await page.$('.particle-field')).screenshot({path:'screenshot-particle-field-light.png'});
+ await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
+ await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'reduce'}]);
+ await page.reload({waitUntil:'networkidle0'});
+ await page.$eval('.particle-field',el=>el.scrollIntoView({block:'center',behavior:'instant'}));
+ assert.ok(await page.$('button[aria-label="Play particle field"]'));
+ await wait(150);const reduced=await snapshot();await wait(150);assert.equal(await snapshot(),reduced);
+ await page.tap('.field-surface');assert.notEqual(await snapshot(),reduced);
+ await page.click('button[aria-label="Play particle field"]');await wait(150);const running=await snapshot();await wait(150);assert.notEqual(await snapshot(),running);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ assert.equal(await page.$('.aside-caption'),null);
+ assert.deepEqual(errors,[]);
+ console.log('PASS: live simulation, repel mode, scatter, pause, keyboard interaction, reset, light/dark, reduced-motion default, touch, mobile bounds, no runtime errors.');
+} finally {await browser.close();}

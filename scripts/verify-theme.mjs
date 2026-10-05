@@ -1,0 +1,34 @@
+import puppeteer from 'puppeteer-core';
+import assert from 'node:assert/strict';
+const browser = await puppeteer.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,pipe:true,args:['--no-sandbox','--disable-gpu']});
+try {
+  const page = await browser.newPage();
+  await page.setViewport({width:1440,height:1000});
+  await page.emulateMediaFeatures([{name:'prefers-color-scheme',value:'dark'}]);
+  await page.goto('http://127.0.0.1:5174',{waitUntil:'networkidle0'});
+  const theme = () => page.$eval('html',el=>el.dataset.theme);
+  assert.equal(await theme(),'dark');
+  await page.emulateMediaFeatures([{name:'prefers-color-scheme',value:'light'}]);
+  await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+  await page.click('.theme-toggle');
+  assert.equal(await theme(),'dark');
+  await page.reload({waitUntil:'networkidle0'});
+  assert.equal(await theme(),'dark');
+  await page.screenshot({path:'screenshot-dark-desktop.png',fullPage:true});
+  await page.click('.theme-toggle');
+  assert.equal(await theme(),'light');
+  await page.emulateMediaFeatures([{name:'prefers-color-scheme',value:'dark'}]);
+  assert.equal(await theme(),'light');
+  await page.click('.theme-toggle');
+  await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+  assert.equal(await page.evaluate(()=>localStorage.getItem('portfolio-theme')),null);
+  await page.click('.hero-actions button');
+  assert.equal(await page.$eval('dialog',el=>getComputedStyle(el).backgroundColor),'rgb(25, 23, 30)');
+  await page.keyboard.press('Escape');
+  await page.setViewport({width:375,height:900});
+  assert.ok(await page.$eval('.theme-toggle',el=>el.getBoundingClientRect().right<=innerWidth));
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.evaluate(()=>scrollTo({top:0,behavior:'instant'}));
+  await page.screenshot({path:'screenshot-dark-mobile.png'});
+  console.log('PASS: system dark/light, live preference changes, manual override, persistence, return to automatic, dark dialogs, mobile control and layout.');
+} finally {await browser.close();}
